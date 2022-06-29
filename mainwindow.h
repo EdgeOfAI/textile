@@ -6,12 +6,23 @@
 #include <QTreeWidget>
 #include <QDebug>
 #include <QLabel>
+#include <QtCore>
 #include <QSqlDatabase>
 #include <formcontrol.h>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
+
+
+class CThread: public QThread{
+public:
+    int cam_id;
+    CThread(){
+
+    };
+    void run();
+};
 
 class Camera{
 public:
@@ -23,8 +34,9 @@ public:
     QString port;
     int status;
     int parent;
+    CThread *thread;
     Camera(){
-
+        thread = new CThread();
     }
     Camera(int id){
         this->id = id;

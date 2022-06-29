@@ -39,6 +39,13 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
+void CThread::run(){
+    qDebug() << "Camera " << this->cam_id << "\n";
+    forever{
+        qDebug() << this->cam_id << "\n";
+    }
+    exit(0);
+}
 void MainWindow::setStatus(){
     for(it_m = machine_items.begin(); it_m != machine_items.end(); it_m++){
         if(getMachineById(it_m.key()).status == 0){
@@ -174,6 +181,8 @@ void MainWindow::getDataFromDB(){
     c1.port = 80;
     c1.parent = m1.id;
     c1.status = 1;
+    c1.thread->cam_id = c1.id;
+    c1.thread->start();
 
     Camera c2;
     c2.id = 2;
@@ -183,6 +192,8 @@ void MainWindow::getDataFromDB(){
     c2.port = 80;
     c2.parent = m1.id;
     c2.status = 1;
+    c2.thread->cam_id = c2.id;
+    c2.thread->start();
 
     m1.cameras.push_back(c1);
     m1.cameras.push_back(c2);
