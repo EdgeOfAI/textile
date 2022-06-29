@@ -1,7 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-m1.cameras.push_back(c1);
 QVector<Machine>machines;
 QMap<Camera, QLabel *>labels;
 QMap<int, QTreeWidgetItem *>machine_items;

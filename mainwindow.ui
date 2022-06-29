@@ -72,8 +72,8 @@
              <string/>
             </property>
             <property name="icon">
-             <iconset>
-              <normaloff>../../../../Desktop/icon_start.png</normaloff>../../../../Desktop/icon_start.png</iconset>
+             <iconset resource="res.qrc">
+              <normaloff>:/icons/icon_start.png</normaloff>:/icons/icon_start.png</iconset>
             </property>
            </widget>
           </item>
@@ -86,8 +86,8 @@
              <string/>
             </property>
             <property name="icon">
-             <iconset>
-              <normaloff>../../../../Desktop/icon_stop.png</normaloff>../../../../Desktop/icon_stop.png</iconset>
+             <iconset resource="res.qrc">
+              <normaloff>:/icons/icon_stop.png</normaloff>:/icons/icon_stop.png</iconset>
             </property>
            </widget>
           </item>
@@ -97,8 +97,8 @@
              <string/>
             </property>
             <property name="icon">
-             <iconset>
-              <normaloff>../../../../Desktop/icon_settings.png</normaloff>../../../../Desktop/icon_settings.png</iconset>
+             <iconset resource="res.qrc">
+              <normaloff>:/icons/icon_settings.png</normaloff>:/icons/icon_settings.png</iconset>
             </property>
            </widget>
           </item>
@@ -195,6 +195,8 @@
    </property>
   </action>
  </widget>
- <resources/>
+ <resources>
+  <include location="res.qrc"/>
+ </resources>
  <connections/>
 </ui>
