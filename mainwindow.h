@@ -6,14 +6,13 @@
 #include <QTreeWidget>
 #include <QDebug>
 #include <QLabel>
-#include <QtCore>
 #include <QSqlDatabase>
 #include <formcontrol.h>
-
+#include "videoprocess.h"
+#include <QtCore>
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
-
 
 class CThread: public QThread{
 public:
@@ -21,7 +20,9 @@ public:
     CThread(){
 
     };
+    QLabel *label;
     void run();
+    void doDefectDetection(cv::Mat frame);
 };
 
 class Camera{
@@ -70,6 +71,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
+    void setPixmap(QPixmap pixmap);
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 private slots:
@@ -77,6 +79,7 @@ private slots:
     void updateList();
     void getDataFromDB();
     void setStatus();
+    void startThreads();
     void loadCameras(QVector<Camera>cameras);
     Camera getCameraById(int id);
     Camera getCameraFromMachineById(Machine machine, int id);

@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-
+#include <QThread>
 QVector<Machine>machines;
 QMap<Camera, QLabel *>labels;
 QMap<int, QTreeWidgetItem *>machine_items;
@@ -34,18 +34,78 @@ MainWindow::MainWindow(QWidget *parent)
     loadCameras(vec);
 
     setStatus();
+
+    startThreads();
+
+
+
 }
 MainWindow::~MainWindow()
 {
+
     delete ui;
 }
+
+void MainWindow::setPixmap(QPixmap pixmap){
+    ui->label->setPixmap(pixmap);
+
+}
+void CThread::doDefectDetection(cv::Mat frame){
+    qDebug()<<"image processd\n";
+
+}
 void CThread::run(){
+
+
     qDebug() << "Camera " << this->cam_id << "\n";
-    forever{
-        qDebug() << this->cam_id << "\n";
+    QString name = "/home/cv-startup/projectAI/Qt/textile/"+QString::number(this->cam_id)+".mp4";
+    VideoCapture cap(name.toStdString().c_str());
+
+    if(!cap.isOpened()){
+        qDebug() << "Error opening video stream or file" << endl;
+        return;
+      }
+
+    cv::Mat inFrame;
+//    QString win_name=QString::number(this->cam_id).toStdString().c_str();
+    while(1){
+        qDebug()<<"image is processing\n";
+        qDebug()<<this->cam_id<<"\n";
+        cap>>inFrame;
+        if(inFrame.empty()){
+            qInfo("frame is empty..\n");
+            break;
+            continue;
+           }
+        doDefectDetection(inFrame);
+
+//        cv::imshow(QString::number(this->cam_id).toStdString(), inFrame );
+        usleep(10000);
+
+//        waitKey(10);
+
+//            // Press  ESC on keyboard to exit
+//         char c=(char)waitKey(10);
+//         if(c==27)
+//             break;
+
+        this->label->setPixmap(
+                    QPixmap::fromImage(
+                        QImage(
+                            inFrame.data,
+                            inFrame.cols,
+                            inFrame.rows,
+                            inFrame.step,
+                            QImage::Format_RGB888).rgbSwapped()));
+
     }
+    cap.release();
+
+     // Closes all the frames
+    destroyAllWindows();
     exit(0);
 }
+
 void MainWindow::setStatus(){
     for(it_m = machine_items.begin(); it_m != machine_items.end(); it_m++){
         if(getMachineById(it_m.key()).status == 0){
@@ -92,6 +152,23 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
         labels[c.id]->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
         labels[c.id]->setText(getMachineById(c.parent).name + "\n" + c.name);
     }
+
+
+}
+void MainWindow::startThreads(){
+
+//    videoprocess my_video;
+//    my_video.start_video();
+    for (auto m:machines){
+        for (auto c:m.cameras){
+            qDebug()<<"\n";
+            c.thread->cam_id=c.id;
+            c.thread->label = ui->label;
+            c.thread->start();
+
+        }
+    }
+
 }
 Machine MainWindow::getMachineById(int id){
     for(auto m: machines){
@@ -181,8 +258,6 @@ void MainWindow::getDataFromDB(){
     c1.port = 80;
     c1.parent = m1.id;
     c1.status = 1;
-    c1.thread->cam_id = c1.id;
-    c1.thread->start();
 
     Camera c2;
     c2.id = 2;
@@ -192,11 +267,9 @@ void MainWindow::getDataFromDB(){
     c2.port = 80;
     c2.parent = m1.id;
     c2.status = 1;
-    c2.thread->cam_id = c2.id;
-    c2.thread->start();
 
     m1.cameras.push_back(c1);
-    m1.cameras.push_back(c2);
+    //m1.cameras.push_back(c2);
 
     machines.push_back(m1);
 
