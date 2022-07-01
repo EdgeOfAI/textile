@@ -8,19 +8,20 @@
 #include <QLabel>
 #include <QSqlDatabase>
 #include <formcontrol.h>
-#include "videoprocess.h"
 #include <QtCore>
+#include <opencv2/opencv.hpp>
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+class CThread;
 class CThread: public QThread{
 public:
-    int cam_id;
-    CThread(){
-
-    };
+    int camera_id;
     QLabel *label;
+    CThread(){
+    };
     void run();
     void doDefectDetection(cv::Mat frame);
 };
@@ -85,13 +86,10 @@ private slots:
     Camera getCameraFromMachineById(Machine machine, int id);
     Machine getMachineById(int id);
     void setStatus(Machine machine, int status);
-
     void on_btnStart_clicked();
-
     void on_btnStop_clicked();
-
-
     void on_btnMachines_clicked();
+
 
 private:
     Ui::MainWindow *ui;

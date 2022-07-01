@@ -1,8 +1,11 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QThread>
+
+using namespace cv;
+
 QVector<Machine>machines;
-QMap<Camera, QLabel *>labels;
+QMap<int, QLabel *>labels;
 QMap<int, QTreeWidgetItem *>machine_items;
 QMap<Camera, QTreeWidgetItem *>camera_items;
 
@@ -36,9 +39,6 @@ MainWindow::MainWindow(QWidget *parent)
     setStatus();
 
     startThreads();
-
-
-
 }
 MainWindow::~MainWindow()
 {
@@ -46,62 +46,37 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::setPixmap(QPixmap pixmap){
-    ui->label->setPixmap(pixmap);
-
-}
 void CThread::doDefectDetection(cv::Mat frame){
-    qDebug()<<"image processd\n";
-
 }
 void CThread::run(){
 
+    qDebug() << "Camera " << this->camera_id << "\n";
 
-    qDebug() << "Camera " << this->cam_id << "\n";
-    QString name = "/home/cv-startup/projectAI/Qt/textile/"+QString::number(this->cam_id)+".mp4";
+    a:
+    QString name = "/home/mansurbek/Desktop/" + QString::number(this->camera_id) +".mp4";
     VideoCapture cap(name.toStdString().c_str());
 
     if(!cap.isOpened()){
         qDebug() << "Error opening video stream or file" << endl;
         return;
-      }
+    }
 
     cv::Mat inFrame;
-//    QString win_name=QString::number(this->cam_id).toStdString().c_str();
-    while(1){
-        qDebug()<<"image is processing\n";
-        qDebug()<<this->cam_id<<"\n";
+    while(true){
         cap>>inFrame;
         if(inFrame.empty()){
-            qInfo("frame is empty..\n");
-            break;
+            qDebug() << this->camera_id << " running agein\n";
+            goto a;
             continue;
-           }
+        }
         doDefectDetection(inFrame);
 
-//        cv::imshow(QString::number(this->cam_id).toStdString(), inFrame );
-        usleep(10000);
-
-//        waitKey(10);
-
-//            // Press  ESC on keyboard to exit
-//         char c=(char)waitKey(10);
-//         if(c==27)
-//             break;
-
-        this->label->setPixmap(
-                    QPixmap::fromImage(
-                        QImage(
-                            inFrame.data,
-                            inFrame.cols,
-                            inFrame.rows,
-                            inFrame.step,
-                            QImage::Format_RGB888).rgbSwapped()));
-
+        if(labels.contains(this->camera_id)){
+            this->label->setPixmap(QPixmap::fromImage(QImage(inFrame.data, inFrame.cols, inFrame.rows, inFrame.step, QImage::Format_RGB888).rgbSwapped()));
+            usleep(60000);
+        }
     }
     cap.release();
-
-     // Closes all the frames
     destroyAllWindows();
     exit(0);
 }
@@ -144,28 +119,22 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
                 row ++;
                 col = 0;
             }
+            c.thread->label = label;
         }
     }
     for(auto c: cameras){
-        qDebug() << c.id << endl;
+        qDebug() << c.id << Qt::endl;
         labels[c.id]->setStyleSheet("background-color: gray; color: #222222; padding-bottom: 12px");
         labels[c.id]->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
         labels[c.id]->setText(getMachineById(c.parent).name + "\n" + c.name);
     }
-
-
 }
 void MainWindow::startThreads(){
 
-//    videoprocess my_video;
-//    my_video.start_video();
-    for (auto m:machines){
-        for (auto c:m.cameras){
-            qDebug()<<"\n";
-            c.thread->cam_id=c.id;
-            c.thread->label = ui->label;
+    for (auto m: machines){
+        for (auto c: m.cameras){
+            c.thread->camera_id = c.id;
             c.thread->start();
-
         }
     }
 
@@ -221,30 +190,6 @@ void MainWindow::on_treeWidget_itemPressed(QTreeWidgetItem *item, int column)
 }
 void MainWindow::getDataFromDB(){
 
-    /*int n_machine = 2;
-    machines.clear();
-    for(int i = 0; i < n_machine; i++){
-        Machine new_m;
-        new_m.id = i + 1;
-        new_m.name = "Machine " + QString::number(i);
-        new_m.status = 1;
-        new_m.cameras.clear();
-
-        for(int j = 0; j < 6; j++){
-            Camera c;
-            c.id = i * 101 + j;
-            c.name = "Camera " + QString::number(j + 1);
-            c.ip = "1223";
-            c.login = "dw";
-            c.password = "ewf";
-            c.port = "ef";
-            c.parent = new_m.id;
-            c.status = true;
-            new_m.cameras.push_back(c);
-        }
-        machines.push_back(new_m);
-    }*/
-
     Machine m1;
     m1.id = 1;
     m1.name = "Machine 1";
@@ -268,8 +213,50 @@ void MainWindow::getDataFromDB(){
     c2.parent = m1.id;
     c2.status = 1;
 
+    Camera c3;
+    c3.id = 3;
+    c3.name = "Cam 3";
+    c3.login = "172.";
+    c3.password = "172.";
+    c3.port = 80;
+    c3.parent = m1.id;
+    c3.status = 1;
+
+    Camera c4;
+    c4.id = 4;
+    c4.name = "Cam 4";
+    c4.login = "172.";
+    c4.password = "172.";
+    c4.port = 80;
+    c4.parent = m1.id;
+    c4.status = 1;
+
+    Camera c5;
+    c5.id = 5;
+    c5.name = "Cam 5";
+    c5.login = "172.";
+    c5.password = "172.";
+    c5.port = 80;
+    c5.parent = m1.id;
+    c5.status = 1;
+
+    Camera c6;
+    c6.id = 6;
+    c6.name = "Cam 6";
+    c6.login = "172.";
+    c6.password = "172.";
+    c6.port = 80;
+    c6.parent = m1.id;
+    c6.status = 1;
+
     m1.cameras.push_back(c1);
-    //m1.cameras.push_back(c2);
+    m1.cameras.push_back(c2);
+    m1.cameras.push_back(c3);
+    m1.cameras.push_back(c4);
+    m1.cameras.push_back(c5);
+    m1.cameras.push_back(c6);
+
+
 
     machines.push_back(m1);
 
