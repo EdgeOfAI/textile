@@ -16,6 +16,8 @@ Machine cur_m = NULL;
 
 QSqlDatabase db;
 
+QMutex mutex;
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -50,6 +52,7 @@ void CThread::doDefectDetection(cv::Mat frame){
 }
 void CThread::run(){
 
+
     qDebug() << "Camera " << this->camera_id << "\n";
 
     a:
@@ -63,18 +66,23 @@ void CThread::run(){
 
     cv::Mat inFrame;
     while(true){
-        cap>>inFrame;
+        cap >> inFrame;
         if(inFrame.empty()){
-            qDebug() << this->camera_id << " running agein\n";
+            qDebug() << this->camera_id << " running again\n";
             goto a;
             continue;
         }
         doDefectDetection(inFrame);
-
+        mutex.lock();
         if(labels.contains(this->camera_id)){
-            this->label->setPixmap(QPixmap::fromImage(QImage(inFrame.data, inFrame.cols, inFrame.rows, inFrame.step, QImage::Format_RGB888).rgbSwapped()));
-            usleep(60000);
+            QPixmap p = QPixmap::fromImage(QImage(inFrame.data, inFrame.cols, inFrame.rows, inFrame.step, QImage::Format_RGB888).rgbSwapped());
+            int w = this->label->width();
+            int h = this->label->height();
+            this->label->setAlignment(Qt::AlignCenter);
+            this->label->setPixmap(p.scaled(w, h, Qt::KeepAspectRatio));
         }
+        mutex.unlock();
+        usleep(40000);
     }
     cap.release();
     destroyAllWindows();
@@ -93,6 +101,7 @@ void MainWindow::setStatus(){
 }
 void MainWindow::loadCameras(QVector<Camera>cameras){
 
+    mutex.lock();
     int col = 0;
     int row = 0;
     QGridLayout *grid = ui->cameraGrid;
@@ -128,6 +137,7 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
         labels[c.id]->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
         labels[c.id]->setText(getMachineById(c.parent).name + "\n" + c.name);
     }
+    mutex.unlock();
 }
 void MainWindow::startThreads(){
 

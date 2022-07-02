@@ -9,6 +9,7 @@
 #include <QSqlDatabase>
 #include <formcontrol.h>
 #include <QtCore>
+#include <QMutex>
 #include <opencv2/opencv.hpp>
 
 QT_BEGIN_NAMESPACE
