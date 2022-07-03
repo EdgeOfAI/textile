@@ -5,7 +5,6 @@
 using namespace cv;
 
 QVector<Machine>machines;
-QMap<int, QLabel *>labels;
 QMap<int, QTreeWidgetItem *>machine_items;
 QMap<Camera, QTreeWidgetItem *>camera_items;
 
@@ -48,15 +47,31 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+CThread::CThread(){
+
+}
+CThread::CThread(int cam_id, QString ip, QString login, QString password, int port){
+    this->camera_id = cam_id;
+    this->ip = ip;
+    this->login = login;
+    this->password = password;
+    this->port = port;
+};
 void CThread::doDefectDetection(cv::Mat frame){
 }
+
 void CThread::run(){
 
 
     qDebug() << "Camera " << this->camera_id << "\n";
+    qDebug() << "IP " << this->ip << "\n";
+    qDebug() << "Login " << this->login << "\n";
+    qDebug() << "Password " << this->password << "\n";
+    qDebug() << "Port " << this->port << "\n";
 
     a:
     QString name = "/home/mansurbek/Desktop/" + QString::number(this->camera_id) +".mp4";
+    qDebug() << name << "\n";
     VideoCapture cap(name.toStdString().c_str());
 
     if(!cap.isOpened()){
@@ -64,6 +79,7 @@ void CThread::run(){
         return;
     }
 
+    int cnt_defects = 0;
     cv::Mat inFrame;
     while(true){
         cap >> inFrame;
@@ -73,13 +89,26 @@ void CThread::run(){
             continue;
         }
         doDefectDetection(inFrame);
+        if(this->camera_id == 2 && rand() % 2 == 0){
+            cnt_defects ++;
+        }
+        if(cnt_defects >= 20){
+            emit(signalDefect(this->camera_id));
+            msleep(10);
+            if (CThread::currentThread()->isInterruptionRequested()) {
+              qDebug() << Q_FUNC_INFO << " terminated";
+              return;
+            }
+        }
         mutex.lock();
-        if(labels.contains(this->camera_id)){
+
+        if(this->active_label){
             QPixmap p = QPixmap::fromImage(QImage(inFrame.data, inFrame.cols, inFrame.rows, inFrame.step, QImage::Format_RGB888).rgbSwapped());
             int w = this->label->width();
             int h = this->label->height();
             this->label->setAlignment(Qt::AlignCenter);
             this->label->setPixmap(p.scaled(w, h, Qt::KeepAspectRatio));
+
         }
         mutex.unlock();
         usleep(40000);
@@ -92,10 +121,10 @@ void CThread::run(){
 void MainWindow::setStatus(){
     for(it_m = machine_items.begin(); it_m != machine_items.end(); it_m++){
         if(getMachineById(it_m.key()).status == 0){
-            it_m.value()->setBackgroundColor(0, QColor(255, 0, 0, 123));
+            it_m.value()->setBackgroundColor(0, QColor(255, 255, 255, 255));
         }
         else if(getMachineById(it_m.key()).status == 1){
-            it_m.value()->setBackgroundColor(0, QColor(255, 255, 255, 222));
+            it_m.value()->setBackgroundColor(0, QColor(0, 255, 0, 255));
         }
     }
 }
@@ -105,7 +134,6 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
     int col = 0;
     int row = 0;
     QGridLayout *grid = ui->cameraGrid;
-    labels.clear();
 
     while(QLayoutItem *item = grid->takeAt(0)){
         if(QWidget *widget = item->widget()){
@@ -122,7 +150,6 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
     else{
         for(auto c: cameras){
             QLabel *label = new QLabel(this);
-            labels[c.id] = label;
             ui->cameraGrid->addWidget(label, row, col++);
             if(col == col_limit){
                 row ++;
@@ -131,19 +158,25 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
             c.thread->label = label;
         }
     }
+    for (auto m: machines){
+        for (auto c: m.cameras){
+            c.thread->active_label = false;
+        }
+    }
     for(auto c: cameras){
         qDebug() << c.id << Qt::endl;
-        labels[c.id]->setStyleSheet("background-color: gray; color: #222222; padding-bottom: 12px");
-        labels[c.id]->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
-        labels[c.id]->setText(getMachineById(c.parent).name + "\n" + c.name);
+        c.thread->active_label = true;
     }
     mutex.unlock();
+}
+void MainWindow::signalDefect(int cam_id){
+    qDebug() << "Defect " << cam_id << "\n";
+    //system("aplay /home/mansurbek/Desktop/sound.wav");
 }
 void MainWindow::startThreads(){
 
     for (auto m: machines){
         for (auto c: m.cameras){
-            c.thread->camera_id = c.id;
             c.thread->start();
         }
     }
@@ -163,7 +196,6 @@ Camera MainWindow::getCameraFromMachineById(Machine machine, int id){
             return c;
         }
     }
-    return Camera(-1);
 }
 
 Camera MainWindow::getCameraById(int id){
@@ -173,7 +205,6 @@ Camera MainWindow::getCameraById(int id){
             return c;
         }
     }
-    return Camera(-1);
 }
 void MainWindow::on_treeWidget_itemPressed(QTreeWidgetItem *item, int column)
 {
@@ -208,6 +239,7 @@ void MainWindow::getDataFromDB(){
     Camera c1;
     c1.id = 1;
     c1.name = "Cam 1";
+    c1.ip = "172.";
     c1.login = "172.";
     c1.password = "172.";
     c1.port = 80;
@@ -217,6 +249,7 @@ void MainWindow::getDataFromDB(){
     Camera c2;
     c2.id = 2;
     c2.name = "Cam 2";
+    c2.ip = "172.";
     c2.login = "172.";
     c2.password = "172.";
     c2.port = 80;
@@ -226,6 +259,7 @@ void MainWindow::getDataFromDB(){
     Camera c3;
     c3.id = 3;
     c3.name = "Cam 3";
+    c3.ip = "172.";
     c3.login = "172.";
     c3.password = "172.";
     c3.port = 80;
@@ -235,6 +269,7 @@ void MainWindow::getDataFromDB(){
     Camera c4;
     c4.id = 4;
     c4.name = "Cam 4";
+    c4.ip = "172.";
     c4.login = "172.";
     c4.password = "172.";
     c4.port = 80;
@@ -244,6 +279,7 @@ void MainWindow::getDataFromDB(){
     Camera c5;
     c5.id = 5;
     c5.name = "Cam 5";
+    c5.ip = "172.";
     c5.login = "172.";
     c5.password = "172.";
     c5.port = 80;
@@ -253,6 +289,7 @@ void MainWindow::getDataFromDB(){
     Camera c6;
     c6.id = 6;
     c6.name = "Cam 6";
+    c6.ip = "172.";
     c6.login = "172.";
     c6.password = "172.";
     c6.port = 80;
@@ -269,6 +306,8 @@ void MainWindow::getDataFromDB(){
 
 
     machines.push_back(m1);
+
+
 
 }
 void MainWindow::updateList(){
@@ -287,12 +326,19 @@ void MainWindow::updateList(){
             inner_item->setData(0, Qt::UserRole, QVariant::fromValue(machines[i].cameras[j].id));
             camera_items[machines[i].cameras[j]] = inner_item;
             item->addChild(inner_item);
+            machines[i].cameras[j].thread = new CThread();
+            machines[i].cameras[j].thread->camera_id = machines[i].cameras[j].id;
+            machines[i].cameras[j].thread->ip = machines[i].cameras[j].ip;
+            machines[i].cameras[j].thread->login = machines[i].cameras[j].login;
+            machines[i].cameras[j].thread->password = machines[i].cameras[j].password;
+            machines[i].cameras[j].thread->port = machines[i].cameras[j].port;
+            machines[i].cameras[j].thread->active_label = false;
+            connect(machines[i].cameras[j].thread, SIGNAL(signalDefect(int)), this, SLOT(signalDefect(int)));
         }
         items.append(item);
     }
     ui->treeWidget->insertTopLevelItems(0, items);
 }
-
 
 void MainWindow::setStatus(Machine machine, int status){
     //Todo set status
@@ -336,4 +382,6 @@ void MainWindow::on_btnMachines_clicked()
     form->setModal(true);
     form->show();
 }
+
+
 

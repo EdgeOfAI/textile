@@ -16,15 +16,25 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-class CThread;
+
 class CThread: public QThread{
+    Q_OBJECT
 public:
     int camera_id;
+    QString ip;
+    QString login;
+    QString password;
+    int port;
     QLabel *label;
-    CThread(){
-    };
-    void run();
+    bool active_label;
+    CThread(int cam_id, QString ip, QString login, QString password, int port);
+    CThread();
     void doDefectDetection(cv::Mat frame);
+signals:
+    void signalDefect(int cam_id);
+protected:
+
+    void run();
 };
 
 class Camera{
@@ -34,15 +44,12 @@ public:
     QString name;
     QString login;
     QString password;
-    QString port;
+    int port;
     int status;
     int parent;
     CThread *thread;
     Camera(){
         thread = new CThread();
-    }
-    Camera(int id){
-        this->id = id;
     }
     bool operator <(const Camera& other) const
     {
@@ -50,6 +57,7 @@ public:
     }
 };
 class Machine{
+
 public:
     int id;
     QString name;
@@ -75,8 +83,10 @@ class MainWindow : public QMainWindow
 public:
     void setPixmap(QPixmap pixmap);
     MainWindow(QWidget *parent = nullptr);
+    QThread *thread;
     ~MainWindow();
 private slots:
+    void signalDefect(int cam_id);
     void on_treeWidget_itemPressed(QTreeWidgetItem *item, int column);
     void updateList();
     void getDataFromDB();
