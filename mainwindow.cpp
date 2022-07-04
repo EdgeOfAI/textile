@@ -15,7 +15,140 @@ Machine cur_m = NULL;
 
 QSqlDatabase db;
 
-QMutex mutex;
+QMutex mutex1;
+
+// Draw the predicted bounding box.
+void CThread::draw_label(Mat& input_image, string label, int left, int top)
+{
+    // Display the label at the top of the bounding box.
+    int baseLine;
+    Size label_size = getTextSize(label, FONT_FACE, FONT_SCALE, THICKNESS, &baseLine);
+    top = max(top, label_size.height);
+    // Top left corner.
+    Point tlc = Point(left, top);
+    // Bottom right corner.
+    Point brc = Point(left + label_size.width, top + label_size.height + baseLine);
+    // Draw black rectangle.
+    rectangle(input_image, tlc, brc, BLACK, FILLED);
+    // Put the label on the black rectangle.
+    putText(input_image, label, Point(left, top + label_size.height), FONT_FACE, FONT_SCALE, YELLOW, THICKNESS);
+}
+
+
+vector<Mat> CThread::pre_process(Mat &input_image, Net &net)
+{
+    Mat blob;
+    blobFromImage(input_image, blob, 1. / 255., Size(INPUT_WIDTH, INPUT_HEIGHT),
+                  Scalar(), true, false);
+    net.setInput(blob);
+    // Forward propagate.
+    vector<Mat> outputs;
+    net.forward(outputs);
+
+    return outputs;
+}
+
+
+Mat CThread::post_process(Mat input_image, vector<Mat> &outputs, const vector<string> &class_name)
+{
+    // Initialize vectors to hold respective outputs while unwrapping detections.
+    vector<int> class_ids;
+    vector<float> confidences;
+    vector<Rect> boxes;
+
+    // Resizing factor.
+    float x_factor = input_image.cols / INPUT_WIDTH;
+    float y_factor = input_image.rows / INPUT_HEIGHT;
+//    for (int i=0;i<10;i++){
+//        qDebug()<<outputs[0].data[i]<<" ";
+//    }
+    float *data = (float *)outputs[0].data;
+
+    const int rows = 25200;
+    // Iterate through 25200 detections.
+    for (int i = 0; i < rows; ++i)
+    {
+        float confidence = data[4];
+
+        // Discard bad detections and continue.
+        if (confidence >= CONFIDENCE_THRESHOLD)
+        {
+//            qDebug()<<confidence<<"\n";
+            float * classes_scores = data + 5;
+            // Create a 1x85 Mat and store class scores of 80 classes.
+            Mat scores(1, class_name.size(), CV_32FC1, classes_scores);
+            // Perform minMaxLoc and acquire index of best class score.
+            Point class_id;
+            double max_class_score;
+            minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+            // Continue if the class score is above the threshold.
+            if (max_class_score > SCORE_THRESHOLD)
+            {
+                // Store class ID and confidence in the pre-defined respective vectors.
+
+                confidences.push_back(confidence);
+                class_ids.push_back(class_id.x);
+
+                // Center.
+                float cx = data[0];
+                float cy = data[1];
+                // Box dimension.
+                float w = data[2];
+                float h = data[3];
+//                qDebug()<<"cx: "<<cx<<"cy: "<<cy<<"w: "<<w<<"h "<<h<<"conf "<<data[4]<<" " << data[5] << " " << data[6] << " " << data[7] << "\n";
+                // Bounding box coordinates.
+                int left = int((cx - 0.5 * w) * x_factor);
+                int top = int((cy - 0.5 * h) * y_factor);
+                int width = int(w * x_factor);
+                int height = int(h * y_factor);
+                // Store good detections in the boxes vector.
+                boxes.push_back(Rect(left, top, width, height));
+            }
+
+        }
+        // Jump to the next column.
+        data += (class_name.size() + 5);
+    }
+    // Perform Non Maximum Suppression and draw predictions.
+    vector<int> indices;
+    NMSBoxes(boxes, confidences, SCORE_THRESHOLD, NMS_THRESHOLD, indices);
+    for (int i = 0; i < indices.size(); i++)
+    {
+
+        int idx = indices[i];
+        Rect box = boxes[idx];
+
+        int left = box.x;
+        int top = box.y;
+        int width = box.width;
+        int height = box.height;
+        // Draw bounding box.
+        rectangle(input_image, Point(left, top), Point(left + width, top + height), RED, 3*THICKNESS);
+        //qDebug() << left << " " << top << " " << width << " " << height << "\n";
+        // Get the label for the class name and its confidence.
+//        string label = format("%.2f", confidences[idx]);
+//        label = class_name[class_ids[idx]] + ":" + label;
+//        // Draw class labels.
+//        draw_label(input_image, label, left, top);
+    }
+
+    return input_image;
+}
+
+void CThread::init_model(){
+    // Load class list.
+    ifstream ifs("/home/cv-startup/projectAI/Qt/textile_new/models/classes.txt");
+    string line;
+
+    while (getline(ifs, line))
+    {
+        class_list.push_back(line);
+    }
+    net = readNet("/home/cv-startup/projectAI/Qt/textile_new/models/defect_best_sim.onnx");
+    net.setPreferableBackend(DNN_BACKEND_CUDA);
+    net.setPreferableTarget(DNN_TARGET_CUDA);
+
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -57,7 +190,11 @@ CThread::CThread(int cam_id, QString ip, QString login, QString password, int po
     this->password = password;
     this->port = port;
 };
-void CThread::doDefectDetection(cv::Mat frame){
+Mat CThread::doDefectDetection(cv::Mat frame){
+    detections = pre_process(frame, net);
+    frame = post_process(frame.clone(), detections, class_list);
+
+    return frame;
 }
 
 void CThread::run(){
@@ -70,17 +207,18 @@ void CThread::run(){
     qDebug() << "Port " << this->port << "\n";
 
     a:
-    QString name = "/home/mansurbek/Desktop/" + QString::number(this->camera_id) +".mp4";
+    QString name = "/home/cv-startup/projectAI/Qt/textile/" + QString::number(this->camera_id) +".mp4";
     qDebug() << name << "\n";
     VideoCapture cap(name.toStdString().c_str());
 
     if(!cap.isOpened()){
-        qDebug() << "Error opening video stream or file" << endl;
+        qDebug() << "Error opening video stream or file\n";
         return;
     }
 
     int cnt_defects = 0;
     cv::Mat inFrame;
+    init_model();
     while(true){
         cap >> inFrame;
         if(inFrame.empty()){
@@ -88,19 +226,19 @@ void CThread::run(){
             goto a;
             continue;
         }
-        doDefectDetection(inFrame);
+       inFrame = doDefectDetection(inFrame);
         if(this->camera_id == 2 && rand() % 2 == 0){
             cnt_defects ++;
         }
         if(cnt_defects >= 20){
-            emit(signalDefect(this->camera_id));
-            msleep(10);
+            //emit(signalDefect(this->camera_id));
+            /*msleep(10);
             if (CThread::currentThread()->isInterruptionRequested()) {
               qDebug() << Q_FUNC_INFO << " terminated";
               return;
-            }
+            }*/
         }
-        mutex.lock();
+        mutex1.lock();
 
         if(this->active_label){
             QPixmap p = QPixmap::fromImage(QImage(inFrame.data, inFrame.cols, inFrame.rows, inFrame.step, QImage::Format_RGB888).rgbSwapped());
@@ -110,7 +248,7 @@ void CThread::run(){
             this->label->setPixmap(p.scaled(w, h, Qt::KeepAspectRatio));
 
         }
-        mutex.unlock();
+        mutex1.unlock();
         usleep(40000);
     }
     cap.release();
@@ -121,16 +259,16 @@ void CThread::run(){
 void MainWindow::setStatus(){
     for(it_m = machine_items.begin(); it_m != machine_items.end(); it_m++){
         if(getMachineById(it_m.key()).status == 0){
-            it_m.value()->setBackgroundColor(0, QColor(255, 255, 255, 255));
+//            it_m.value()->setBackgroundColor(0, QColor(255, 255, 255, 255));
         }
         else if(getMachineById(it_m.key()).status == 1){
-            it_m.value()->setBackgroundColor(0, QColor(0, 255, 0, 255));
+//            it_m.value()->setBackgroundColor(0, QColor(0, 255, 0, 255));
         }
     }
 }
 void MainWindow::loadCameras(QVector<Camera>cameras){
 
-    mutex.lock();
+    mutex1.lock();
     int col = 0;
     int row = 0;
     QGridLayout *grid = ui->cameraGrid;
@@ -167,7 +305,7 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
         qDebug() << c.id << Qt::endl;
         c.thread->active_label = true;
     }
-    mutex.unlock();
+    mutex1.unlock();
 }
 void MainWindow::signalDefect(int cam_id){
     qDebug() << "Defect " << cam_id << "\n";
