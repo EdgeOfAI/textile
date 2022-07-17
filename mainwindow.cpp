@@ -15,7 +15,7 @@ Machine cur_m = NULL;
 
 QSqlDatabase db;
 
-QMutex mutex;
+bool is_running = false;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -34,16 +34,12 @@ MainWindow::MainWindow(QWidget *parent)
     }
     QVector<Camera>vec;
     getDataFromDB();
-    updateList();
     loadCameras(vec);
-
     setStatus();
-
-    startThreads();
+    is_running = false;
 }
 MainWindow::~MainWindow()
 {
-
     delete ui;
 }
 
@@ -62,7 +58,6 @@ void CThread::doDefectDetection(cv::Mat frame){
 
 void CThread::run(){
 
-
     qDebug() << "Camera " << this->camera_id << "\n";
     qDebug() << "IP " << this->ip << "\n";
     qDebug() << "Login " << this->login << "\n";
@@ -75,7 +70,7 @@ void CThread::run(){
     VideoCapture cap(name.toStdString().c_str());
 
     if(!cap.isOpened()){
-        qDebug() << "Error opening video stream or file" << endl;
+        qDebug() << "Error opening video stream or file" << "\n";
         return;
     }
 
@@ -100,7 +95,6 @@ void CThread::run(){
               return;
             }
         }
-        mutex.lock();
 
         if(this->active_label){
             QPixmap p = QPixmap::fromImage(QImage(inFrame.data, inFrame.cols, inFrame.rows, inFrame.step, QImage::Format_RGB888).rgbSwapped());
@@ -110,7 +104,6 @@ void CThread::run(){
             this->label->setPixmap(p.scaled(w, h, Qt::KeepAspectRatio));
 
         }
-        mutex.unlock();
         usleep(40000);
     }
     cap.release();
@@ -130,11 +123,14 @@ void MainWindow::setStatus(){
 }
 void MainWindow::loadCameras(QVector<Camera>cameras){
 
-    mutex.lock();
     int col = 0;
     int row = 0;
     QGridLayout *grid = ui->cameraGrid;
-
+    for (auto m: machines){
+        for (auto c: m.cameras){
+            c.thread->active_label = false;
+        }
+    }
     while(QLayoutItem *item = grid->takeAt(0)){
         if(QWidget *widget = item->widget()){
             widget->deleteLater();
@@ -158,19 +154,14 @@ void MainWindow::loadCameras(QVector<Camera>cameras){
             c.thread->label = label;
         }
     }
-    for (auto m: machines){
-        for (auto c: m.cameras){
-            c.thread->active_label = false;
-        }
-    }
+
     for(auto c: cameras){
         qDebug() << c.id << Qt::endl;
         c.thread->active_label = true;
     }
-    mutex.unlock();
 }
 void MainWindow::signalDefect(int cam_id){
-    qDebug() << "Defect " << cam_id << "\n";
+    //qDebug() << "Defect " << cam_id << "\n";
     //system("aplay /home/mansurbek/Desktop/sound.wav");
 }
 void MainWindow::startThreads(){
@@ -180,7 +171,14 @@ void MainWindow::startThreads(){
             c.thread->start();
         }
     }
-
+}
+void MainWindow::stopThreads(){
+    for (auto m: machines){
+        for (auto c: m.cameras){
+            c.thread->terminate();
+            c.thread->wait();
+        }
+    }
 }
 Machine MainWindow::getMachineById(int id){
     for(auto m: machines){
@@ -208,6 +206,7 @@ Camera MainWindow::getCameraById(int id){
 }
 void MainWindow::on_treeWidget_itemPressed(QTreeWidgetItem *item, int column)
 {
+    if(is_running)stopThreads();
     int id = item->data(0, Qt::UserRole).toInt();
     QVector<Camera>vec;
     ui->btnStart->setEnabled(false);
@@ -225,89 +224,46 @@ void MainWindow::on_treeWidget_itemPressed(QTreeWidgetItem *item, int column)
         cur_m = machine;
     }
     else{
-        vec.push_back(getCameraById(id));
+        vec.append(getCameraById(id));
     }
     loadCameras(vec);
+    if(is_running)startThreads();
 }
 void MainWindow::getDataFromDB(){
 
-    Machine m1;
-    m1.id = 1;
-    m1.name = "Machine 1";
-    m1.status = 1;
+    qDebug() << "Get database\n";
+    QSqlQuery query("SELECT * FROM db_machine");
+    machines.clear();
+    while(query.next()){
+        Machine m;
+        m.id = query.value(0).toInt();
+        m.name = query.value(1).toString();
+        m.status = query.value(2).toInt();
 
-    Camera c1;
-    c1.id = 1;
-    c1.name = "Cam 1";
-    c1.ip = "172.";
-    c1.login = "172.";
-    c1.password = "172.";
-    c1.port = 80;
-    c1.parent = m1.id;
-    c1.status = 1;
+        QSqlQuery c_query;
+        c_query.prepare("SELECT * FROM db_camera WHERE parent = (:machine)");
+        c_query.bindValue(":machine", m.id);
 
-    Camera c2;
-    c2.id = 2;
-    c2.name = "Cam 2";
-    c2.ip = "172.";
-    c2.login = "172.";
-    c2.password = "172.";
-    c2.port = 80;
-    c2.parent = m1.id;
-    c2.status = 1;
+        if (c_query.exec())
+        {
+           while(c_query.next())
+           {
+               Camera c;
+               c.id = c_query.value(0).toInt();
+               c.name = c_query.value(1).toString();
+               c.ip = c_query.value(2).toString();
+               c.login = c_query.value(3).toString();
+               c.password = c_query.value(4).toString();
+               c.port = c_query.value(5).toInt();
+               c.status = c_query.value(6).toInt();
+               c.parent = c_query.value(7).toInt();
 
-    Camera c3;
-    c3.id = 3;
-    c3.name = "Cam 3";
-    c3.ip = "172.";
-    c3.login = "172.";
-    c3.password = "172.";
-    c3.port = 80;
-    c3.parent = m1.id;
-    c3.status = 1;
-
-    Camera c4;
-    c4.id = 4;
-    c4.name = "Cam 4";
-    c4.ip = "172.";
-    c4.login = "172.";
-    c4.password = "172.";
-    c4.port = 80;
-    c4.parent = m1.id;
-    c4.status = 1;
-
-    Camera c5;
-    c5.id = 5;
-    c5.name = "Cam 5";
-    c5.ip = "172.";
-    c5.login = "172.";
-    c5.password = "172.";
-    c5.port = 80;
-    c5.parent = m1.id;
-    c5.status = 1;
-
-    Camera c6;
-    c6.id = 6;
-    c6.name = "Cam 6";
-    c6.ip = "172.";
-    c6.login = "172.";
-    c6.password = "172.";
-    c6.port = 80;
-    c6.parent = m1.id;
-    c6.status = 1;
-
-    m1.cameras.push_back(c1);
-    m1.cameras.push_back(c2);
-    m1.cameras.push_back(c3);
-    m1.cameras.push_back(c4);
-    m1.cameras.push_back(c5);
-    m1.cameras.push_back(c6);
-
-
-
-    machines.push_back(m1);
-
-
+               m.cameras.push_back(c);
+           }
+        }
+        machines.push_back(m);
+    }
+    updateList();
 
 }
 void MainWindow::updateList(){
@@ -325,7 +281,7 @@ void MainWindow::updateList(){
             QTreeWidgetItem *inner_item = new QTreeWidgetItem(static_cast<QTreeWidget *>(nullptr), QStringList(machines[i].cameras[j].name));
             inner_item->setData(0, Qt::UserRole, QVariant::fromValue(machines[i].cameras[j].id));
             camera_items[machines[i].cameras[j]] = inner_item;
-            item->addChild(inner_item);
+            //item->addChild(inner_item);
             machines[i].cameras[j].thread = new CThread();
             machines[i].cameras[j].thread->camera_id = machines[i].cameras[j].id;
             machines[i].cameras[j].thread->ip = machines[i].cameras[j].ip;
@@ -362,14 +318,11 @@ void MainWindow::setStatus(Machine machine, int status){
         ui->btnStop->setEnabled(true);
     }
     setStatus();
-
 }
 void MainWindow::on_btnStart_clicked()
 {
     setStatus(cur_m, 1);
 }
-
-
 void MainWindow::on_btnStop_clicked()
 {
     setStatus(cur_m, 0);
@@ -377,11 +330,30 @@ void MainWindow::on_btnStop_clicked()
 
 void MainWindow::on_btnMachines_clicked()
 {
-    FormControl *form = new FormControl();
+    if(is_running){
+        stopThreads();
+    }
+    is_running = false;
+
+    FormControl *form = new FormControl(this, &db);
+    connect(form, SIGNAL(destroyed()), this, SLOT(getDataFromDB()));
     form->setAttribute(Qt::WA_DeleteOnClose);
     form->setModal(true);
     form->show();
 }
 
-
+void MainWindow::on_btnStopThread_clicked()
+{
+    if(is_running){
+        stopThreads();
+    }
+    is_running = false;
+}
+void MainWindow::on_btnStartThread_clicked()
+{
+    if(!is_running){
+        startThreads();
+    }
+    is_running = true;
+}
 

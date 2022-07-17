@@ -10,6 +10,8 @@
 #include <formcontrol.h>
 #include <QtCore>
 #include <QMutex>
+#include <QSqlQuery>
+
 #include <opencv2/opencv.hpp>
 
 QT_BEGIN_NAMESPACE
@@ -92,6 +94,7 @@ private slots:
     void getDataFromDB();
     void setStatus();
     void startThreads();
+    void stopThreads();
     void loadCameras(QVector<Camera>cameras);
     Camera getCameraById(int id);
     Camera getCameraFromMachineById(Machine machine, int id);
@@ -101,6 +104,9 @@ private slots:
     void on_btnStop_clicked();
     void on_btnMachines_clicked();
 
+    void on_btnStopThread_clicked();
+
+    void on_btnStartThread_clicked();
 
 private:
     Ui::MainWindow *ui;
